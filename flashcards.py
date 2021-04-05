@@ -1,12 +1,16 @@
 from datetime import datetime
 from flask import Flask, render_template, abort, jsonify, request, redirect, url_for
 
+
 from model import db, save_db
 
 app = Flask(__name__)
 
-
 @app.route('/')
+def home():
+    return render_template("home.html")
+
+@app.route('/welcome')
 def welcome():
     return render_template(
         "welcome.html",

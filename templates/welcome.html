@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 
+{% set active_page = 'home' %}
 {% block title %}Welcome{% endblock %}
 
 {% block content %}
@@ -9,7 +10,7 @@
         <em>Getting Started with Flask</em>
         on <a href="https://www.pluralsight.com">Pluralsight</a>
     </p>
-    <!---<img src="/static/gigakubica.jpeg">-->
+    <img src="/static/images/gigakubica.jpeg">
     <p>
         {{message}}
     </p>
@@ -25,5 +26,30 @@
         {% endfor %}
     </ul>
     <a href="{{ url_for('add_card') }}">Add a new card</a>
+
+    <div class="row">
+        <div class="col-lg-3">
+            <div class="my-4">
+                <h1>Filters</h1>
+            </div>
+        </div>
+        <div class="col-lg-9">
+            <div class="row my-5 card-wrapper">
+                <div class="card h-100">
+                    <img src="{{ url_for('static', filename='images/placeholder.png')}}">
+                    <div class="card-body">
+                        <h4 class="card-title">Item title</h4>
+                        <h5>$2.00</h5>
+                        <p class="card-text">Description</p>
+                    </div>
+                    <div class="card-footer">
+                        <small class="text-muted">
+                            Category -> Subcategory
+                        </small>
+                    </div>    
+                </div>
+            </div>
+        </div>
+    </div>
 
 {% endblock %}
