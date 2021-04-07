@@ -4,7 +4,9 @@ from flask_wtf import FlaskForm, RecaptchaField
 from flask_wtf.file import FileAllowed, FileRequired
 from wtforms import StringField, TextAreaField, SubmitField, SelectField, DecimalField, FileField
 from wtforms.validators import InputRequired, DataRequired, Length, ValidationError
+from wtforms.widgets import Input
 from werkzeug.utils import secure_filename, escape, unescape
+from markupsafe import Markup
 import pdb
 import sqlite3
 import os
@@ -23,9 +25,28 @@ app.config["IMAGE_UPLOADS"] = os.path.join(basedir, "uploads")
 #app.config["RECAPTCHA_PUBLIC_KEY] = ""
 #app.config["RECAPTCHA_PRIVATE_KEY] = ""
 
+class PriceInput(Input):
+    input_type = "number"
+
+    def __call__(self, field, **kwargs):
+        kwargs.setdefault("id", field.id)
+        kwargs.setdefault("type", self.input_type)
+        kwargs.setdefault("step", "0.01")
+        if "value" not in kwargs:
+            kwargs["value"] = field._value()
+        if "required" not in kwargs and "required" in getattr('field', "flags", []):
+            kwargs["required"] = True
+        return Markup("""<div class="input-group mb-3">
+                    <div class="input-group-prepend">
+                        <span class="input-group-text">zł</span>
+                    </div>
+                    <input %s>        
+        </div>""" % self.html_params(name=field.name, **kwargs))
+
+
 class ItemForm(FlaskForm):
     title       = StringField("Title", validators=[InputRequired("Input is required!"), DataRequired("Data is required!"), Length(min=5, max=20, message="Input must be between 5 and 20 characters long")])
-    price       = DecimalField("Price")
+    price       = PriceField("Price")
     description = TextAreaField("Description", validators=[InputRequired("Input is required!"), DataRequired("Data is required!"), Length(min=4, max=40, message="Description must be between 4 and 40 characters long")])
     image       = FileField("Image", validators=[FileAllowed(app.config["ALLOWED_IMAGE_EXTENSIONS"], "Images only!")])
     #recaptcha  = RecaptchaField()
@@ -70,10 +91,12 @@ class BelongsToOtherFieldOption:
         if not exists:
             raise ValidationError(self.message)
 
+class PriceField(DecimalField):
+    widget = PriceInput()
 
 class NewItemForm(ItemForm):
     title       = StringField("Title", validators=[InputRequired("Input is required!"), DataRequired("Data is required!"), Length(min=5, max=20, message="Input must be between 5 and 20 characters long")])
-    price       = DecimalField("Price")
+    price       = PriceField("Price")
     description = TextAreaField("Description", validators=[InputRequired("Input is required!"), DataRequired("Data is required!"), Length(min=4, max=40, message="Description must be between 4 and 40 characters long")])
     category    = SelectField("Category", coerce=int)
     subcategory = SelectField("Subcategory", coerce=int, validators=[BelongsToOtherFieldOption(table="subcategories", belongs_to="category", message="Subcategory does not belong to that category.")])
