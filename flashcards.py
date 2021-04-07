@@ -1,10 +1,10 @@
 from datetime import datetime
 from flask import Flask, send_from_directory, render_template, abort, jsonify, request, redirect, url_for, g, flash
-from flask_wtf import FlaskForm
+from flask_wtf import FlaskForm, RecaptchaField
 from flask_wtf.file import FileAllowed, FileRequired
 from wtforms import StringField, TextAreaField, SubmitField, SelectField, DecimalField, FileField
 from wtforms.validators import InputRequired, DataRequired, Length, ValidationError
-from werkzeug.utils import secure_filename
+from werkzeug.utils import secure_filename, escape, unescape
 import pdb
 import sqlite3
 import os
@@ -20,12 +20,15 @@ app.config["SECRET_KEY"] = "secretkey"
 app.config["ALLOWED_IMAGE_EXTENSIONS"] = ["jpeg", "jpg", "png"]
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024
 app.config["IMAGE_UPLOADS"] = os.path.join(basedir, "uploads")
+#app.config["RECAPTCHA_PUBLIC_KEY] = ""
+#app.config["RECAPTCHA_PRIVATE_KEY] = ""
 
 class ItemForm(FlaskForm):
     title       = StringField("Title", validators=[InputRequired("Input is required!"), DataRequired("Data is required!"), Length(min=5, max=20, message="Input must be between 5 and 20 characters long")])
     price       = DecimalField("Price")
     description = TextAreaField("Description", validators=[InputRequired("Input is required!"), DataRequired("Data is required!"), Length(min=4, max=40, message="Description must be between 4 and 40 characters long")])
     image       = FileField("Image", validators=[FileAllowed(app.config["ALLOWED_IMAGE_EXTENSIONS"], "Images only!")])
+    #recaptcha  = RecaptchaField()
     
 class BelongsToOtherFieldOption:
     def __init__(self, table, belongs_to, foreign_key=None, message=None):
@@ -119,8 +122,8 @@ def edit_item(item_id):
             title = ?, description = ?, price = ?, image = ?
             WHERE id = ?""",
                 (
-                    form.title.data,
-                    form.description.data,
+                    escape(form.title.data),
+                    escape(form.description.data),
                     float(form.price.data),
                     filename,
                     item_id                
@@ -132,7 +135,7 @@ def edit_item(item_id):
             return redirect(url_for("item", item_id=item_id))
 
         form.title.data         = item["title"]
-        form.description.data   = item["description"]
+        form.description.data   = unescape(item["description"])
         form.price.data         = item["price"]
 
         if form.errors:
@@ -232,7 +235,7 @@ def home():
 
         if form.title.data.strip():
             filter_queries.append("i.title LIKE ?")
-            parameters.append("%" + form.title.data + "%")
+            parameters.append("%" + escape(form.title.data) + "%")
 
         if form.category.data:
             filter_queries.append("i.category_id = ?")
