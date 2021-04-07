@@ -1,20 +1,31 @@
 from datetime import datetime
-from flask import Flask, render_template, abort, jsonify, request, redirect, url_for, g, flash
+from flask import Flask, send_from_directory, render_template, abort, jsonify, request, redirect, url_for, g, flash
 from flask_wtf import FlaskForm
-from wtforms import StringField, TextAreaField, SubmitField, SelectField, DecimalField
+from flask_wtf.file import FileAllowed, FileRequired
+from wtforms import StringField, TextAreaField, SubmitField, SelectField, DecimalField, FileField
 from wtforms.validators import InputRequired, DataRequired, Length
+from werkzeug.utils import secure_filename
 import pdb
 import sqlite3
+import os
+import datetime
+from secrets import token_hex
+
+basedir = os.path.abspath(os.path.dirname(__file__))
 
 from model import db, save_db
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "secretkey"
+app.config["ALLOWED_IMAGE_EXTENSIONS"] = ["jpeg", "jpg", "png"]
+app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024
+app.config["IMAGE_UPLOADS"] = os.path.join(basedir, "uploads")
 
 class ItemForm(FlaskForm):
     title       = StringField("Title", validators=[InputRequired("Input is required!"), DataRequired("Data is required!"), Length(min=5, max=20, message="Input must be between 5 and 20 characters long")])
     price       = DecimalField("Price")
     description = TextAreaField("Description", validators=[InputRequired("Input is required!"), DataRequired("Data is required!"), Length(min=4, max=40, message="Description must be between 4 and 40 characters long")])
+    image       = FileField("Image", validators=[FileRequired(),FileAllowed(app.config["ALLOWED_IMAGE_EXTENSIONS"], "Images only!")])
     
 
 class NewItemForm(ItemForm):
@@ -30,6 +41,13 @@ class EditItemForm(ItemForm):
 
 class DeleteItemForm(FlaskForm):
     submit      = SubmitField("Delete item")
+
+class FilterForm(FlaskForm):
+    title       = StringField("Title", validators=[Length(max=20)])
+    price       = SelectField("Price", coerce=int, choices=[(0, "---"), (1, "Max to Min"), (2, "Min to Max")])
+    category    = SelectField("Category", coerce=int)
+    subcategory = SelectField("Subcategory", coerce=int)
+    submit      = SubmitField("Filter")
 
 @app.route("/item/<int:item_id>/edit", methods=["GET", "POST"])
 def edit_item(item_id):
@@ -140,14 +158,62 @@ def home():
     conn = get_db()
     c = conn.cursor()
 
-    items_from_db = c.execute("""SELECT
+    form = FilterForm(request.args, meta={"csrf": False})
+
+    c.execute("Select id, name FROM categories")
+    categories = c.fetchall()
+    categories.insert(0, (0, "---"))
+    form.category.choices = categories
+    
+    c.execute("SELECT  id, name FROM subcategories WHERE category_id = ?", (1,))
+    subcategories = c.fetchall()
+    subcategories.insert(0, (0, "---"))
+    form.subcategory.choices = subcategories
+
+    query = """SELECT
                     i.id, i.title, i.description, i.price, i.image, c.name, s.name
                     FROM
                     items AS i
                     INNER JOIN categories AS c ON i.category_id = c.id
                     INNER JOIN subcategories AS s ON i.subcategory_id = s.id
-                    ORDER BY i.id DESC
-    """)
+                    """
+
+    if form.validate():
+        # add filters to query
+        filter_queries = []
+        parameters = []
+
+        if form.title.data.strip():
+            filter_queries.append("i.title LIKE ?")
+            parameters.append("%" + form.title.data + "%")
+
+        if form.category.data:
+            filter_queries.append("i.category_id = ?")
+            parameters.append(form.category.data)
+        
+        if form.subcategory.data:
+            filter_queries.append("i.subcategory_id = ?")
+            parameters.append(form.subcategory.data)
+        
+        if filter_queries:
+            query += " WHERE "
+            query += " AND ".join(filter_queries)
+
+        if form.price.data:
+            if form.price.data == 1:
+                query += " ORDER BY i.price DESC"
+            else:
+                query += " ORDER BY i.price"
+        else:
+            query += " ORDER BY i.id DESC"
+        
+        
+        items_from_db = c.execute(query, tuple(parameters))
+        #print(query) (terminal)
+    else:
+        # just execute query
+        items_from_db = c.execute(query + "ORDER BY i.id DESC")
+
 
     items = []
     for row in items_from_db:
@@ -163,7 +229,13 @@ def home():
         items.append(item)
 
     
-    return render_template("home.html", items=items)
+    return render_template("home.html", items=items, form=form)
+
+
+@app.route("/uploads/<filename>")
+def uploads(filename):
+    return send_from_directory(app.config["IMAGE_UPLOADS"], filename)
+
 
 
 @app.route("/item/new", methods=["GET", "POST"])
@@ -187,6 +259,15 @@ def new_item():
 
     #pdb.set_trace()
     if form.validate_on_submit():
+
+
+        format = '%Y%m%dT%H%M%S'
+        now = datetime.datetime.utcnow().strftime(format)
+        random_string = token_hex(2)
+        filename = random_string + "_" + now + "_" + form.image.data.filename
+        filename = secure_filename(filename)
+        form.image.data.save(os.path.join(app.config["IMAGE_UPLOADS"], filename))
+
         # Process the form data
         c.execute("""INSERT INTO items
                     (title, description, price, image, category_id, subcategory_id)
@@ -195,7 +276,7 @@ def new_item():
                         form.title.data,
                         form.description.data,
                         float(form.price.data),
-                        "",
+                        filename,
                         form.category.data,
                         form.subcategory.data
                     )
