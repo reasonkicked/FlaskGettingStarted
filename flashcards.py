@@ -38,7 +38,7 @@ class PriceInput(Input):
             kwargs["required"] = True
         return Markup("""<div class="input-group mb-3">
                     <div class="input-group-prepend">
-                        <span class="input-group-text">zł</span>
+                        <span class="input-group-text">$</span>
                     </div>
                     <input %s>        
         </div>""" % self.html_params(name=field.name, **kwargs))
@@ -117,6 +117,18 @@ class FilterForm(FlaskForm):
     category    = SelectField("Category", coerce=int)
     subcategory = SelectField("Subcategory", coerce=int)
     submit      = SubmitField("Filter")
+
+@app.route("/category/<int:category_id>")
+def category(category_id):
+    c = get_db().cursor()
+    c.execute("""SELECT id, name FROM subcategories
+                WHERE category_id = ?""",
+                (category_id,)
+    )
+    subcategories = c.fetchall()
+
+    return jsonify(subcategories=subcategories)
+
 
 @app.route("/item/<int:item_id>/edit", methods=["GET", "POST"])
 def edit_item(item_id):
@@ -239,7 +251,7 @@ def home():
     categories.insert(0, (0, "---"))
     form.category.choices = categories
     
-    c.execute("SELECT  id, name FROM subcategories WHERE category_id = ?", (1,))
+    c.execute("SELECT  id, name FROM subcategories")
     subcategories = c.fetchall()
     subcategories.insert(0, (0, "---"))
     form.subcategory.choices = subcategories
@@ -323,10 +335,7 @@ def new_item():
     # [(1, 'Food'), (2, 'Technology'), (3, 'Books')]
     form.category.choices = categories
 
-    c.execute("""SELECT id, name FROM subcategories
-                WHERE category_id = ?""",
-                (1,)
-    )
+    c.execute("SELECT id, name FROM subcategories")
     subcategories = c.fetchall()
     form.subcategory.choices = subcategories
 

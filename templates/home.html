@@ -18,7 +18,7 @@
                 </div>
                 <div class="form-group">
                     {{ form.category.label }}
-                    {{ form.category(class="form-control") }}                    
+                    {{ form.category(class="form-control category-filter") }}                    
                 </div>
                 <div class="form-group">
                     {{ form.subcategory.label }}
@@ -60,4 +60,8 @@
         </div>
     </div>
 </div>
+{% endblock %}
+{% block javascript %}
+<script src="{{ url_for('static', filename='js/subcategory.js') }}">
+</script>
 {% endblock %}
