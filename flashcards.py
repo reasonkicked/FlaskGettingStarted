@@ -43,6 +43,9 @@ class PriceInput(Input):
                     <input %s>        
         </div>""" % self.html_params(name=field.name, **kwargs))
 
+class PriceField(DecimalField):
+    widget = PriceInput()
+
 
 class ItemForm(FlaskForm):
     title       = StringField("Title", validators=[InputRequired("Input is required!"), DataRequired("Data is required!"), Length(min=5, max=20, message="Input must be between 5 and 20 characters long")])
@@ -91,8 +94,7 @@ class BelongsToOtherFieldOption:
         if not exists:
             raise ValidationError(self.message)
 
-class PriceField(DecimalField):
-    widget = PriceInput()
+
 
 class NewItemForm(ItemForm):
     title       = StringField("Title", validators=[InputRequired("Input is required!"), DataRequired("Data is required!"), Length(min=5, max=20, message="Input must be between 5 and 20 characters long")])
@@ -161,8 +163,7 @@ def edit_item(item_id):
         form.description.data   = unescape(item["description"])
         form.price.data         = item["price"]
 
-        if form.errors:
-            flash("{}".format(form.errors), "danger")
+        
         return render_template("edit_item.html", item=item, form=form)
 
     return redirect(url_for("home"))
@@ -358,8 +359,7 @@ def new_item():
         flash("Item {} has been successfully submited".format(request.form.get("title")), "success")
         return redirect(url_for("home"))
 
-    if form.errors:
-        flash("{}".format(form.errors), "danger")
+    
 
     return render_template("new_item.html", form=form)
 
