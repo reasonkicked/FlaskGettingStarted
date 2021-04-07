@@ -3,7 +3,7 @@ from flask import Flask, send_from_directory, render_template, abort, jsonify, r
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileAllowed, FileRequired
 from wtforms import StringField, TextAreaField, SubmitField, SelectField, DecimalField, FileField
-from wtforms.validators import InputRequired, DataRequired, Length
+from wtforms.validators import InputRequired, DataRequired, Length, ValidationError
 from werkzeug.utils import secure_filename
 import pdb
 import sqlite3
@@ -27,14 +27,55 @@ class ItemForm(FlaskForm):
     description = TextAreaField("Description", validators=[InputRequired("Input is required!"), DataRequired("Data is required!"), Length(min=4, max=40, message="Description must be between 4 and 40 characters long")])
     image       = FileField("Image", validators=[FileAllowed(app.config["ALLOWED_IMAGE_EXTENSIONS"], "Images only!")])
     
+class BelongsToOtherFieldOption:
+    def __init__(self, table, belongs_to, foreign_key=None, message=None):
+        if not table:
+            raise AttributeError("""
+            BelongsToOtherFieldOption validator needs the table parameter
+            """)
+        if not belongs_to:
+            raise AttributeError("""
+            BelongsToOtherFieldOption validator needs the belongs_to parameter
+            """)
+        
+        self.table = table
+        self.belongs_to = belongs_to
+
+        if not foreign_key:
+            foreign_key = belongs_to + "_id"
+        if not message:
+            message = "Chosen option is not valid."
+        
+        self.foreign_key = foreign_key
+        self.message = message
+    
+    def __call__(self, form, field):
+        c = get_db().cursor()
+        try:
+            c.execute("""SELECT COUNT (*) FROM {}
+                            WHERE id = ? AND {} = ?""".format(
+                            self.table,
+                            self.foreign_key
+                        ),
+                        (field.data, getattr(form, self.belongs_to).data)
+            )
+        except Exception as e:
+            raise AttributeError("""
+            Passed parameters are not correct. {}
+            """.format(e))
+        exists = c.fetchone()[0]
+        if not exists:
+            raise ValidationError(self.message)
+
 
 class NewItemForm(ItemForm):
     title       = StringField("Title", validators=[InputRequired("Input is required!"), DataRequired("Data is required!"), Length(min=5, max=20, message="Input must be between 5 and 20 characters long")])
     price       = DecimalField("Price")
     description = TextAreaField("Description", validators=[InputRequired("Input is required!"), DataRequired("Data is required!"), Length(min=4, max=40, message="Description must be between 4 and 40 characters long")])
     category    = SelectField("Category", coerce=int)
-    subcategory = SelectField("Subcategory", coerce=int)
+    subcategory = SelectField("Subcategory", coerce=int, validators=[BelongsToOtherFieldOption(table="subcategories", belongs_to="category", message="Subcategory does not belong to that category.")])
     submit      = SubmitField("Submit")
+
 
 class EditItemForm(ItemForm):
     submit      = SubmitField("Update Item")
