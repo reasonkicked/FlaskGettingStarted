@@ -2,7 +2,7 @@ from datetime import datetime
 from flask import Flask, send_from_directory, render_template, abort, jsonify, request, redirect, url_for, g, flash
 from flask_wtf import FlaskForm, RecaptchaField
 from flask_wtf.file import FileAllowed, FileRequired
-from wtforms import StringField, TextAreaField, SubmitField, SelectField, DecimalField, FileField
+from wtforms import HiddenField, StringField, TextAreaField, SubmitField, SelectField, DecimalField, FileField
 from wtforms.validators import InputRequired, DataRequired, Length, ValidationError
 from wtforms.widgets import Input
 from werkzeug.utils import secure_filename, escape, unescape
@@ -117,6 +117,11 @@ class FilterForm(FlaskForm):
     category    = SelectField("Category", coerce=int)
     subcategory = SelectField("Subcategory", coerce=int)
     submit      = SubmitField("Filter")
+
+class NewCommentForm(FlaskForm):
+    content = TextAreaField("Comment", validators=[InputRequired("Input is required."), DataRequired("Data is required.")])
+    item_id = HiddenField(validators=[DataRequired()])
+    submit = SubmitField("Submit")
 
 @app.route("/category/<int:category_id>")
 def category(category_id):
@@ -234,10 +239,54 @@ def item(item_id):
         item = {}    
 
     if item:
+        comments_from_db = c.execute("""SELECT content FROM comments
+                                    WHERE item_id = ? ORDER BY id DESC""",
+                                    (item_id,)
+        )
+        comments = []
+        for row in comments_from_db:
+            comment = {
+                "content": row[0]
+            }
+            comments.append(comment)
+
+        commentForm = NewCommentForm()
+        commentForm.item_id.data = item_id
         deleteItemForm = DeleteItemForm()
-        return render_template("item.html", item=item, deleteItemForm=deleteItemForm)
+
+
+
+        deleteItemForm = DeleteItemForm()
+        return render_template("item.html", commentForm=commentForm, item=item, comments=comments, deleteItemForm=deleteItemForm)
     return redirect(url_for("home"))
 
+@app.route("/comment/new", methods=["POST"])
+def new_comment():
+    conn = get_db()
+    c = conn.cursor()
+    form = NewCommentForm()
+
+    try:
+        is_ajax = int(request.form["ajax"])
+    except:
+        is_ajax = 0
+
+    if form.validate_on_submit():
+
+        c.execute("""INSERT INTO comments (content, item_id)
+                    VALUES (?,?)""",
+                    (   
+                        escape(form.content.data),
+                        form.item_id.data
+                    )
+        )
+        conn.commit()
+
+        if is_ajax:
+            return render_template("_comment.html", content=form.content.data)
+    if is_ajax:
+        return "Content is required.", 400
+    return redirect(url_for('item', item_id=form.item_id.data))
 
 @app.route('/')
 def home():
